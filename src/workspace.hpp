@@ -3,53 +3,67 @@
 #include <glm/glm.hpp>
 #include <vector>
 #include <memory>
+#include <functional>
 #include <glad/glad.h>
 #include <glfw/glfw3.h>
 
 #include "shaders.hpp"
-#include "undirected_graph.hpp"
+#include "graph.hpp"
 
-class Node {
-public:
-	static GLuint circle;
-	static std::unique_ptr<Shader> node_shader;
-	static void init();
-	glm::vec2 position;
+struct NodePositions {
+	const graph::DirectedGraph& graph;
+	std::vector<glm::vec2> positions;
+	int iterations = 0;
+	std::function<double(int)> damp_func;
 
-	Node(glm::vec2 position) : position(position) {
-		init();
+	NodePositions(const graph::DirectedGraph& graph, std::function<double(int)> dampening = [](int i){ return 0.1 * (1 - sin(i / 1000) * 3.1415 / 2); })
+	: graph(graph), positions(graph.node_count()), damp_func(dampening) {
+		for (auto & pos : positions) {
+			pos = randomCircle();
+		}
 	}
-
-	void render();
+	void reset();
+	void simulate_spring();
+	void simulate_spring_iter(int iterations);
 };
 
 class Workspace {
-public:
-	static GLuint quad;
-	static std::unique_ptr<Shader> grid_shader;
-	static std::unique_ptr<Shader> edge_shader;
-	static void init();
+private:
+	using EdgeColorFunc = std::function<std::pair<glm::vec3, glm::vec3>(graph::Edge)>;
+	using KeyFunc = std::function<void(int, int, int)>;
+
+	void init();
+	bool initBoard();
+
 
 	float grid_spacing;
-	UndirectedGraph<std::nullptr_t> graph;
+	const graph::DirectedGraph& graph;
+	NodePositions positions;
+	
 	GLuint edge_mesh;
 	GLuint edge_buffer;
+public:
+	void _keyboard_callback(GLFWwindow* wnd, int key, int action, int mods);
+	KeyFunc key_callback;
+	EdgeColorFunc edge_color;
 
-	std::vector<Node> nodes;
-
-	Workspace(float grid_spacing);
-
-	void add_node(glm::vec2);
-	void remove_node(int);
-
-	void add_edge(int, int);
-	void remove_edge(int, int);
+	Workspace(
+		float grid_spacing,
+		const graph::DirectedGraph& graph);
 
 	void prepare_edges();
-
-	void simulate_spring(float dampening);
-	void simulate_spring_iter(int iterations);
-
 	void render();
+
+	void run();
 };
+
+template<typename T>
+T easeOutQuad(T x) {
+	return 1 - (1 - x) * (1 - x);
+}
+
+template<typename T>
+T lerp(T from, T to, float a) {
+	return (1 - a) * from + (a) * to;
+}
 

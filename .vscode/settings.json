@@ -76,6 +76,11 @@
 		"__verbose_abort": "cpp",
 		"ios": "cpp",
 		"locale": "cpp",
-		"*.ipp": "cpp"
+		"*.ipp": "cpp",
+		"charconv": "cpp",
+		"deque": "cpp",
+		"span": "cpp",
+		"__tree": "cpp",
+		"queue": "cpp"
 	}
 }
