@@ -19,17 +19,35 @@ struct Problem {
 	std::string name;
 	std::string comment;
 
+	std::pair<int, int> bounds;
+
 	graph::DirectedGraph graph;
 	std::map<graph::Edge, int> weights;
 	graph::DirectedGraph dependencies;
 
-	Problem(std::string path) {
+	Problem(std::string path) : bounds(-1, -1) {
 		std::ifstream file(path);
 		int count = -2;
 		graph::Node i = 0, j = 0;
+		std::string bound_str = "";
 		for (std::string line; std::getline(file, line);) {
 			if (read_key(line, "NAME", name)) { continue; }
 			if (read_key(line, "COMMENT", comment)) { continue; }
+			if (read_key(line, "SOLUTION_BOUNDS", bound_str)) {
+				size_t comma = bound_str.find_first_of(",");
+				if (comma != std::string::npos) {
+					// Two numbers -> Range
+					int a = std::stoi(bound_str);
+					int b = std::stoi(bound_str.substr(comma + 1));
+					bounds = std::make_pair(a, b);
+				}
+				else {
+					// One number
+					int a = std::stoi(bound_str);
+					bounds = std::make_pair(a, a);
+				}
+				continue;
+			}
 
 			if (line == "EDGE_WEIGHT_SECTION") {
 				count = -1;

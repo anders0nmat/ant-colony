@@ -16,12 +16,8 @@ struct NodePositions {
 	int iterations = 0;
 	std::function<double(int)> damp_func;
 
-	NodePositions(const graph::DirectedGraph& graph, std::function<double(int)> dampening = [](int i){ return 0.1 * (1 - sin(i / 1000) * 3.1415 / 2); })
-	: graph(graph), positions(graph.node_count()), damp_func(dampening) {
-		for (auto & pos : positions) {
-			pos = randomCircle();
-		}
-	}
+	NodePositions(const graph::DirectedGraph& graph, std::function<double(int)> dampening = [](int i){ return 0.1 * (1 - sin(i / 1000) * 3.1415 / 2); });
+	
 	void reset();
 	void simulate_spring();
 	void simulate_spring_iter(int iterations);

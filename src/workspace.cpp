@@ -6,7 +6,7 @@
 #include <chrono>
 
 #include "workspace.hpp"
-#include "animatedValue.hpp"
+#include "animated_value.hpp"
 #include "camera.hpp"
 
 namespace {
@@ -103,6 +103,13 @@ namespace {
 	}
 }
 
+NodePositions::NodePositions(const graph::DirectedGraph& graph, std::function<double(int)> dampening)
+: graph(graph), positions(graph.node_count()), damp_func(dampening) {
+	for (auto & pos : positions) {
+		pos = randomCircle();
+	}
+}
+
 void NodePositions::reset() {
 	iterations = 0;
 	for (auto& e : positions) {
@@ -167,7 +174,7 @@ bool Workspace::initBoard() {
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-	window = glfwCreateWindow(800, 600, "Test Window", nullptr, nullptr);
+	window = glfwCreateWindow(800, 600, "Ant Optimization", nullptr, nullptr);
 	if (window == nullptr) {
 		std::cout << "Failed to create GLFW Window" << std::endl;
 		glfwTerminate();
@@ -284,6 +291,8 @@ Workspace::Workspace(
 	const graph::DirectedGraph& graph)
 	: grid_spacing(grid_spacing), graph(graph), positions(graph) {
 	init();
+
+	positions.simulate_spring_iter(1000);
 
 	glGenVertexArrays(1, &edge_mesh);
 	glBindVertexArray(edge_mesh);
