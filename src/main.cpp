@@ -65,6 +65,28 @@ void print_optimizer(const AntOptimizer& optimizer, const Problem& problem) {
 	print_best_route(optimizer, problem);
 }
 
+void run_colony(AntOptimizer& optimizer, int rounds = 1) {
+	int i = 0;
+	auto tp1 = std::chrono::high_resolution_clock::now();
+
+	while (i++ < rounds) {
+		optimizer.optimize();
+	}
+
+	auto tp2 = std::chrono::high_resolution_clock::now();
+	double elapsed = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(tp2 - tp1).count();
+	double avg = elapsed / rounds;
+
+	std::cout.precision(4);
+	std::cout
+		<< "Elapsed: " 
+		<< avg
+		<< "ms average ("
+		<< elapsed
+		<< "ms total)"
+		<< std::endl;
+}
+
 int main(int argc, char* argv[]) {
 	std::string problem_path;
 	bool interactive = false;
@@ -81,7 +103,7 @@ int main(int argc, char* argv[]) {
 		if (arg == "-r" || arg == "--rounds") {
 			i++;
 			if (i >= argc) {
-				std::cout << "No count given for --rounds parameter" << std::endl;
+				std::cout << "No count given for " << arg << " parameter" << std::endl;
 				return 1;
 			}
 			try {
@@ -155,15 +177,7 @@ int main(int argc, char* argv[]) {
 	);
 
 	if (!interactive) {
-		int i = 0;
-		auto tp1 = std::chrono::high_resolution_clock::now();
-		while (i++ < rounds) {
-			colony.optimize();
-		}
-		auto tp2 = std::chrono::high_resolution_clock::now();
-		auto elapsed = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(tp2 - tp1);
-		std::cout.precision(4);
-		std::cout << "Elapsed: " << elapsed.count() / rounds << "ms average (" << elapsed.count() << "ms total)" << std::endl;
+		run_colony(colony, rounds);
 
 		print_optimizer(colony, problem);
 
@@ -182,15 +196,7 @@ int main(int argc, char* argv[]) {
 	workspace.key_callback = [&colony, &workspace, &problem, rounds](int key, int action, int mods) {
 		if (key == GLFW_KEY_A && action == GLFW_PRESS) {
 			int iterations = (mods & GLFW_MOD_SHIFT) ? rounds : 1;
-			int i = 0;
-			auto tp1 = std::chrono::high_resolution_clock::now();
-			while (i++ < iterations) {
-				colony.optimize();
-			}
-			auto tp2 = std::chrono::high_resolution_clock::now();
-			auto elapsed = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(tp2 - tp1);
-			std::cout.precision(4);
-			std::cout << "Elapsed: " << elapsed.count() / iterations << "ms average (" << elapsed.count() << "ms total)" << std::endl;
+			run_colony(colony, iterations);
 
 			print_optimizer(colony, problem);
 			workspace.prepare_edges();

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <map>
+#include <random>
 
 #include "graph.hpp"
 
@@ -26,13 +27,15 @@ public:
 	*/
 	std::vector<int> allowed_nodes;
 	Route route;
+
+	std::default_random_engine generator;
 };
 
 struct Parameters {
-	float alpha = 0;
-	float beta = 0;
-	float roh = 0;
-	float q = 0;
+	float alpha;
+	float beta;
+	float roh;
+	float q;
 	float initial_pheromone;
 	float min_pheromone;
 	float max_pheromone;
@@ -76,14 +79,22 @@ private:
 		Responsible for updating an edge given its value and calculated delta
 	*/
 	void update_edge_pheromone(float& value, const float delta);
+
+	/*
+		Checks whether an ant has reached its goal and can be considered
+		in future analysis.
+	*/
+	bool goal_reached(const Ant& ant);
 	
 	const Parameters params;
 	
 	const graph::DirectedGraph& graph;
 	const graph::DirectedGraph& sequence_graph;
 	std::map<graph::Edge, int> edge_weight;
+	std::map<graph::Edge, float> edge_visibility;
 	std::map<graph::Edge, float> edge_pheromone;
 	std::vector<Ant> initial_ants;
+	std::random_device rand_device;
 public:
 	int round = 0;
 	Route best_route;

@@ -1,5 +1,5 @@
 #include <cmath>
-#include <random>
+#include <chrono>
 
 #define DEBUG
 
@@ -12,10 +12,14 @@
 float AntOptimizer::edge_value(const Ant& ant, graph::Node node) const {
 	if (ant.allowed_nodes.at(node) != 0) { return 0; }
 
-	float pher = edge_pheromone.at(graph::Edge(ant.current_node, node));
-	float len  = edge_weight   .at(graph::Edge(ant.current_node, node));
-	float vis  = 1 / (len == 0 ? params.zero_distance : len);
-	return std::pow(pher, params.alpha) * std::pow(vis, params.beta);
+	float pher = edge_pheromone .at(graph::Edge(ant.current_node, node));
+	float vis  = edge_visibility.at(graph::Edge(ant.current_node, node));
+	return std::pow(pher, params.alpha) * vis;
+
+	// vis is precalculated in edge_visibility
+	//float len  = edge_weight   .at(graph::Edge(ant.current_node, node));
+	//float vis  = 1 / (len == 0 ? params.zero_distance : len);
+	//vis = std::pow(vis, params.beta);
 }
 
 void AntOptimizer::advance_ant(Ant& ant) {
@@ -34,16 +38,18 @@ void AntOptimizer::advance_ant(Ant& ant) {
 		Used to easily select choice without normalizing first
 	*/
 	std::vector<std::pair<float, graph::Node>> choices;
+	choices.reserve(graph.node_count());
+
 	float sum = 0;
+	// ~90% of function is spent in this loop (without otimizations)
 	for (const graph::Node node : graph.adjacency_list.at(ant.current_node)) {
 		float value = edge_value(ant, node);
-		choices.emplace_back(sum + value, node);
 		sum += value;
+		choices.emplace_back(sum, node);
 	}
-	std::random_device rd;
-	std::default_random_engine generator(rd());
+	
 	std::uniform_real_distribution<float> distribution(0.0, sum);
-	float rand = distribution(generator);
+	float rand = distribution(ant.generator);
 	
 	graph::Node next = graph::NO_NODE;
 	for (const auto& pair : choices) {
@@ -119,6 +125,13 @@ void AntOptimizer::update_edge_pheromone(float& value, const float delta) {
 	value = std::clamp(value, params.min_pheromone, params.max_pheromone);
 }
 
+bool AntOptimizer::goal_reached(const Ant& ant) {
+	bool 
+		ant_lost = ant.current_node == graph::NO_NODE,
+		not_at_end = ant.current_node != graph.node_count() - 1;
+	
+	return !(ant_lost || not_at_end);
+}
 
 
 AntOptimizer::AntOptimizer(
@@ -154,6 +167,11 @@ AntOptimizer::AntOptimizer(
 			ant.allowed_nodes.at(node) -= 1;
 		}
 	}
+
+	// Precalculate Visibility into edge_weights
+	for (auto & p : edge_weight) {
+		this->edge_visibility.emplace(p.first, std::pow(1 / std::max(static_cast<float>(p.second), params.zero_distance), params.beta));
+	}
 }
 
 /*
@@ -162,29 +180,20 @@ AntOptimizer::AntOptimizer(
 void AntOptimizer::optimize() {
 	// Init Ants
 	std::vector<Ant> ants = initial_ants;
-
-	// Let ants wander
-	for (int i = 0; i < graph.node_count() - 1; i++) {
-		for (auto& ant : ants) {
-			advance_ant(ant);
-		}
-	}
-
-	/*
-		We don't need to initialize this.
-		We call the `[]`-operator, which creates entries with the default initializer
-		The default initializer for float returns 0.0, which is what we would initialize this to.
-	*/
-	std::map<graph::Edge, float> delta_pheromone;
 	const Ant* best_ant = nullptr;
 	
-	for (Ant& ant : ants) {
-		bool 
-			ant_lost = ant.current_node == graph::NO_NODE,
-		//	no_circle = !graph.has_edge(ant.route.nodes.back(), ant.route.nodes.front());
-			not_at_end = ant.current_node != graph.node_count() - 1;
 
-		if (ant_lost || not_at_end) {
+	// 97% of function time is spent in this loop
+	for (Ant& ant : ants) {
+		ant.generator.seed(rand_device());
+		
+		// Let ants wander (96% of the loop body happens here)
+		for (int i = 0; i < graph.node_count() - 1; i++) {
+			advance_ant(ant);
+			if (ant.current_node == graph::NO_NODE) { break; }
+		}
+
+		if (!goal_reached(ant)) {
 			// Invalid solution
 			continue;
 		}
@@ -195,12 +204,14 @@ void AntOptimizer::optimize() {
 		if (best_ant == nullptr || ant.route.length < best_ant->route.length) {
 			best_ant = &ant;
 		}
-
-		/*
-			Iterate over ant nodes pairwise to get used edges.
-			Update pheromone delta for edge accordingly.
-		*/
 	}
+
+	/*
+		We don't need to initialize this.
+		We call the `[]`-operator, which creates entries with the default initializer
+		The default initializer for float returns 0.0, which is what we would initialize this to.
+	*/
+	std::map<graph::Edge, float> delta_pheromone;
 
 	if (best_ant == nullptr) return;
 	for (auto it = std::next(best_ant->route.nodes.begin()); it != best_ant->route.nodes.end(); it++) {
@@ -211,7 +222,7 @@ void AntOptimizer::optimize() {
 	for (auto& edge_pair : edge_pheromone) {
 		update_edge_pheromone(edge_pair.second, delta_pheromone.count(edge_pair.first) > 0 ? delta_pheromone.at(edge_pair.first) : 0);
 	}
-
+	
 	round++;
 }
 
