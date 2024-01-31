@@ -9,7 +9,7 @@
 			"request": "launch",
 			"name": "Debug",
 			"program": "${workspaceFolder}/main",
-			"args": [],
+			"args": ["-i", "problems/ESC25.sop"],
 			"cwd": "${workspaceFolder}"
 		}
 	]

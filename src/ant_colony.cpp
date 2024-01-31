@@ -1,8 +1,11 @@
 #include <cmath>
 #include <random>
 
-// DEBUG
+#define DEBUG
+
+#ifdef DEBUG
 #include <iostream>
+#endif
 
 #include "ant_colony.hpp"
 
@@ -11,8 +14,8 @@ float AntOptimizer::edge_value(const Ant& ant, graph::Node node) const {
 
 	float pher = edge_pheromone.at(graph::Edge(ant.current_node, node));
 	float len  = edge_weight   .at(graph::Edge(ant.current_node, node));
-	float vis  = 1 / (len == 0 ? 1E-3 : len);
-	return std::pow(pher, alpha) * std::pow(vis, beta);
+	float vis  = 1 / (len == 0 ? params.zero_distance : len);
+	return std::pow(pher, params.alpha) * std::pow(vis, params.beta);
 }
 
 void AntOptimizer::advance_ant(Ant& ant) {
@@ -41,7 +44,7 @@ void AntOptimizer::advance_ant(Ant& ant) {
 	std::default_random_engine generator(rd());
 	std::uniform_real_distribution<float> distribution(0.0, sum);
 	float rand = distribution(generator);
-
+	
 	graph::Node next = graph::NO_NODE;
 	for (const auto& pair : choices) {
 		if (rand < pair.first) {
@@ -92,33 +95,44 @@ int AntOptimizer::route_length(const std::vector<graph::Node>& route) const {
 float AntOptimizer::pheromone_update(const Ant& ant, graph::Edge edge) const {
 	float L_k = ant.route.length;
 	
-	return Q / L_k;
+	return params.q / L_k;
 }
 
-float AntOptimizer::max_pheromone() const {
-	float max = 0;
+std::pair<float, float> AntOptimizer::minmax_pheromone() const {
+	std::pair<float, float> minmax = std::make_pair(std::numeric_limits<float>::max(), std::numeric_limits<float>::min());
 	for (const auto& ph : edge_pheromone) {
-		max = std::max(max, ph.second);
+		minmax.first = std::min(minmax.first, ph.second);
+		minmax.second = std::max(minmax.second, ph.second);
 	}
-	return max;
+	return minmax;
 }
+
+void AntOptimizer::update_best_route(const Ant& ant) {
+	if (ant.route.length < best_route.length) {
+		best_route = ant.route;
+	}
+}
+
+void AntOptimizer::update_edge_pheromone(float& value, const float delta) {
+	value *= (1.0f - params.roh);
+	value += delta;
+	value = std::clamp(value, params.min_pheromone, params.max_pheromone);
+}
+
+
 
 AntOptimizer::AntOptimizer(
 	const graph::DirectedGraph& graph,
 	const graph::DirectedGraph& sequence_graph,
 	std::map<graph::Edge, int>& edge_weight,
 	std::vector<Ant>& initial_ants,
-	float initial_pheromone,
-	float alpha,
-	float beta,
-	float roh,
-	float q)
+	Parameters params)
 
-: alpha(alpha), beta(beta), roh(roh), Q(q), graph(graph),
+: params(params), graph(graph),
   sequence_graph(sequence_graph), edge_weight(edge_weight), initial_ants(initial_ants) {
 	
 	for (const auto& edge : graph.edges) {
-		edge_pheromone.emplace(edge, initial_pheromone);
+		edge_pheromone.emplace(edge, params.initial_pheromone);
 	}
 
 	best_route = Route(std::numeric_limits<int>::max());
@@ -162,6 +176,7 @@ void AntOptimizer::optimize() {
 		The default initializer for float returns 0.0, which is what we would initialize this to.
 	*/
 	std::map<graph::Edge, float> delta_pheromone;
+	const Ant* best_ant = nullptr;
 	
 	for (Ant& ant : ants) {
 		bool 
@@ -175,29 +190,26 @@ void AntOptimizer::optimize() {
 		}
 
 		ant.route.length = route_length(ant.route.nodes);
-		if (ant.route.length < best_route.length) {
-			best_route = ant.route;
+		update_best_route(ant);
+
+		if (best_ant == nullptr || ant.route.length < best_ant->route.length) {
+			best_ant = &ant;
 		}
 
 		/*
 			Iterate over ant nodes pairwise to get used edges.
 			Update pheromone delta for edge accordingly.
 		*/
-		for (auto it = std::next(ant.route.nodes.begin()); it != ant.route.nodes.end(); it++) {
-			graph::Edge edge(*std::prev(it), *it);
-			delta_pheromone[edge] += pheromone_update(ant, edge);
-		}
 	}
 
-	// foreach pheromone { pheromone *= evaporation; pheromone += delta_pheromone}
-	/*for (auto it = edge_pheromone.begin(); it != edge_pheromone.end(); it++) {
-		// (7.14) in [1]
-		it->second *= (1.0f - roh);
-		it->second += delta_pheromone.count(it->first) > 0 ? delta_pheromone[it->first] : 0.0f;
-	*/
+	if (best_ant == nullptr) return;
+	for (auto it = std::next(best_ant->route.nodes.begin()); it != best_ant->route.nodes.end(); it++) {
+		graph::Edge edge(*std::prev(it), *it);
+		delta_pheromone[edge] += pheromone_update(*best_ant, edge);
+	}
+
 	for (auto& edge_pair : edge_pheromone) {
-		edge_pair.second *= (1.0f - roh);
-		edge_pair.second += delta_pheromone.count(edge_pair.first) > 0 ? delta_pheromone.at(edge_pair.first) : 0;
+		update_edge_pheromone(edge_pair.second, delta_pheromone.count(edge_pair.first) > 0 ? delta_pheromone.at(edge_pair.first) : 0);
 	}
 
 	round++;

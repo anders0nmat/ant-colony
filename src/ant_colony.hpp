@@ -28,6 +28,17 @@ public:
 	Route route;
 };
 
+struct Parameters {
+	float alpha = 0;
+	float beta = 0;
+	float roh = 0;
+	float q = 0;
+	float initial_pheromone;
+	float min_pheromone;
+	float max_pheromone;
+	float zero_distance;
+};
+
 class AntOptimizer {
 private:
 	/*
@@ -55,11 +66,18 @@ private:
 		Expects to only be called with edges `ant` actually visited
 	*/
 	float pheromone_update(const Ant& ant, graph::Edge edge) const;
+
+	/*
+		Saves the best route so far, updating if neccessary
+	*/
+	void update_best_route(const Ant& ant);
+
+	/*
+		Responsible for updating an edge given its value and calculated delta
+	*/
+	void update_edge_pheromone(float& value, const float delta);
 	
-	const float alpha; // Affects pheromone weight
-	const float beta;  // Affects visibility weight
-	const float roh;   // Evaporation of pheromone
-	const float Q;     // Ant pheromone amount
+	const Parameters params;
 	
 	const graph::DirectedGraph& graph;
 	const graph::DirectedGraph& sequence_graph;
@@ -75,14 +93,10 @@ public:
 		const graph::DirectedGraph& sequence_graph,
 		std::map<graph::Edge, int>& edge_weight,
 		std::vector<Ant>& initial_ants,
-		float initial_pheromone,
-		float alpha,
-		float beta,
-		float roh,
-		float q);
+		Parameters params);
 
 	float pheromone(graph::Edge edge) const;
-	float max_pheromone() const;
+	std::pair<float, float> minmax_pheromone() const;
 	const std::map<graph::Edge, float>& pheromone_list() const;
 
 	void optimize();

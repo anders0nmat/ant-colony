@@ -1,6 +1,7 @@
 #include <fstream>
 #include <string>
 #include <map>
+#include <limits>
 
 #include <iostream>
 
@@ -73,7 +74,7 @@ struct Problem {
 						else {
 							graph::Edge e(i, j);
 							graph.add_edge(e);
-							weights.emplace(e, n);
+							weights.emplace(e, n == 1000000 ? std::numeric_limits<int>::max() : n);
 						}
 					}
 

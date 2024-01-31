@@ -155,7 +155,7 @@ void NodePositions::simulate_spring() {
 	}
 
 	for (int i = 0; i < positions.size(); i++) {
-		positions[i] += force[i];
+		positions[i] += glm::clamp(force[i], glm::vec2(-5, -5), glm::vec2(5, 5));
 	}
 
 	iterations++;
