@@ -125,7 +125,7 @@ void AntOptimizer::update_edge_pheromone(float& value, const float delta) {
 	value = std::clamp(value, params.min_pheromone, params.max_pheromone);
 }
 
-bool AntOptimizer::goal_reached(const Ant& ant) {
+bool AntOptimizer::goal_reached(const Ant& ant) const {
 	bool 
 		ant_lost = ant.current_node == graph::NO_NODE,
 		not_at_end = ant.current_node != graph.node_count() - 1;

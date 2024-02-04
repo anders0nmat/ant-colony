@@ -84,7 +84,7 @@ private:
 		Checks whether an ant has reached its goal and can be considered
 		in future analysis.
 	*/
-	bool goal_reached(const Ant& ant);
+	bool goal_reached(const Ant& ant) const;
 	
 	const Parameters params;
 	

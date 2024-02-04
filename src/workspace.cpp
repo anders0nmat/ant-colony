@@ -208,9 +208,9 @@ void Workspace::init() {
 	if (!initBoard()) { exit(-1); }
 	current = this;
 
-	grid_shader = std::make_unique<Shader>("grid");
-	edge_shader = std::make_unique<Shader>("edges");
-	node_shader = std::make_unique<Shader>("basic");
+	grid_shader = std::make_unique<Shader>("./shaders/grid");
+	edge_shader = std::make_unique<Shader>("./shaders/edges");
+	node_shader = std::make_unique<Shader>("./shaders/basic");
 
 	/* Quad */ {
 		const float vertices[] = {
