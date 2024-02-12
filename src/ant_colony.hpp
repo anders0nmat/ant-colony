@@ -111,5 +111,6 @@ public:
 	const std::map<graph::Edge, float>& pheromone_list() const;
 
 	void optimize();
+	void optimize(int rounds);
 };
 

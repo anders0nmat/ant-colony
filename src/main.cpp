@@ -66,12 +66,9 @@ void print_optimizer(const AntOptimizer& optimizer, const Problem& problem) {
 }
 
 void run_colony(AntOptimizer& optimizer, int rounds = 1) {
-	int i = 0;
 	auto tp1 = std::chrono::high_resolution_clock::now();
 
-	while (i++ < rounds) {
-		optimizer.optimize();
-	}
+	optimizer.optimize(rounds);
 
 	auto tp2 = std::chrono::high_resolution_clock::now();
 	double elapsed = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(tp2 - tp1).count();

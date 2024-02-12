@@ -226,6 +226,12 @@ void AntOptimizer::optimize() {
 	round++;
 }
 
+void AntOptimizer::optimize(int rounds) {
+	while (rounds-- > 0) {
+		optimize();
+	}
+}
+
 float AntOptimizer::pheromone(graph::Edge edge) const {
 	return edge_pheromone.count(edge) > 0 ? edge_pheromone.at(edge) : 0;
 }
