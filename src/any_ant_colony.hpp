@@ -43,7 +43,7 @@ struct Parameters {
 };
 
 class AntOptimizer {
-private:
+protected:
 	/*
 		Calculates unnormalized probability that `ant` will advance to `node`
 		Returns 0 if `ant` is not allowed to visit `node`
@@ -56,7 +56,7 @@ private:
 		Chooses between possible next nodes of `ant`
 		and advances `ant` to chosen node.
 	*/
-	void advance_ant(Ant& ant);
+	void advance_ant(Ant& ant) const;
 
 	/*
 		Calculates length (sum of weights) of visiting nodes in
@@ -71,9 +71,10 @@ private:
 	float pheromone_update(const Ant& ant, graph::Edge edge) const;
 
 	/*
-		Saves the best route so far, updating if neccessary
+		Saves the best route so far, updating if neccessary.
+		Return value indicates whether ant had a better route.
 	*/
-	void update_best_route(const Ant& ant);
+	bool update_best_route(const Ant& ant);
 
 	/*
 		Responsible for updating an edge given its value and calculated delta
@@ -90,7 +91,7 @@ private:
 	
 	const graph::DirectedGraph& graph;
 	const graph::DirectedGraph& sequence_graph;
-	std::map<graph::Edge, int> edge_weight;
+	const std::map<graph::Edge, int> edge_weight;
 	std::map<graph::Edge, float> edge_visibility;
 	std::map<graph::Edge, float> edge_pheromone;
 	std::vector<Ant> initial_ants;
@@ -102,15 +103,17 @@ public:
 	AntOptimizer(
 		const graph::DirectedGraph& graph,
 		const graph::DirectedGraph& sequence_graph,
-		std::map<graph::Edge, int>& edge_weight,
+		const std::map<graph::Edge, int>& edge_weight,
 		std::vector<Ant>& initial_ants,
 		Parameters params);
+
+	virtual ~AntOptimizer() = default;
 
 	float pheromone(graph::Edge edge) const;
 	std::pair<float, float> minmax_pheromone() const;
 	const std::map<graph::Edge, float>& pheromone_list() const;
 
-	void optimize();
-	void optimize(int rounds);
+	virtual void optimize() {}
+	virtual void optimize(int rounds) {}
 };
 

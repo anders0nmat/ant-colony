@@ -1,11 +1,84 @@
-#include "ant_colony.hpp"
+#include "serial_ant_colony.hpp"
+#include "parallel_ant_colony.hpp"
 #include "problem.hpp"
 #include "workspace.hpp"
 
 #include <chrono>
 #include <filesystem>
+#include <memory>
 
+struct CliParams {
+	bool multithreaded = false;
+	bool interactive = false;
+	int rounds = 100;
+	std::string problem_path;
 
+	CliParams(int argc, char* argv[]) {
+		for (int i = 1; i < argc; i++) {
+			std::string arg = argv[i];
+
+			if (arg == "-i" || arg == "--interactive") {
+				interactive = true;
+				continue;
+			}
+
+			if (arg == "-m" || arg == "--multithreaded") {
+				multithreaded = true;
+				continue;
+			}
+
+			if (arg == "-r" || arg == "--rounds") {
+				i++;
+				if (i >= argc) {
+					std::cout << "No count given for " << arg << " parameter" << std::endl;
+					exit(1);
+				}
+				try {
+					rounds = std::stoi(argv[i]);
+				}
+				catch(const std::invalid_argument& e) {
+					std::cout << "No valid integer: " << argv[i] << std::endl;
+					exit(1);
+				}
+				
+				continue;
+			}
+
+			if (arg == "-h" || arg == "--help") {
+				std::cout
+				<< "Ant Optimizer\n"
+				<< "Usage: ./main [OPTIONS] FILE\n"
+				<< "\n"
+				<< "Options:\n"
+				<< "  -i    --interactive   : Start with GUI and manual control\n"
+				<< "  -m    --multithreaded : Use PThread to optimize algorithms"
+				<< "  -r N  --rounds N      : Do N optimization steps. Requires [SHIFT] in interactive mode. Default: 100\n"
+				<< "  -h    --help          : Show this help page\n"
+				<< "\n"
+				<< "Interactive mode shortcuts:\n"
+				<< "  [L MOUSE BTN]   Drag node plane \n"
+				<< "  [MOUSE WHEEL]   Zoom node plane \n"
+				<< "  [R]             Reshuffle nodes\n"
+				<< "  [SPACE]         Simulate one step of springs. Positions nodes\n"
+				<< "  [A]             Simulate 1 ant colony iteration\n"
+				<< "  [SHIFT] + [A]   Simulate N ant colony iterations. N specified by -r parameter. Default: 100\n"
+				<< "  [ESC]           Quit\n"
+				<< "\n";
+
+				exit(0);
+			}
+
+			problem_path = arg;
+		}
+
+		if (!std::filesystem::exists(problem_path)) {
+			std::cout << "File '" << problem_path << "' does not exist";
+			exit(1);
+		}
+
+		rounds = std::max(1, rounds);
+	}
+};
 
 void print_max_pheromone(const AntOptimizer& optimizer) {
 	std::pair<graph::Edge, float> max_pheromone(graph::Edge(-1, -1), std::numeric_limits<float>::min());
@@ -84,69 +157,23 @@ void run_colony(AntOptimizer& optimizer, int rounds = 1) {
 		<< std::endl;
 }
 
+std::unique_ptr<AntOptimizer> makeColony(bool multithreaded, const Problem& problem, std::vector<Ant>& ants, Parameters params) {
+	if (multithreaded) {
+		return std::make_unique<ParallelAntOptimizer>(
+			problem.graph, problem.dependencies, problem.weights,
+			ants, params);;
+	}
+	else {
+		return std::make_unique<SerialAntOptimizer>(
+			problem.graph, problem.dependencies, problem.weights,
+			ants, params);
+	}
+}
+
 int main(int argc, char* argv[]) {
-	std::string problem_path;
-	bool interactive = false;
-	int rounds = 100;
+	CliParams cli(argc, argv);
 
-	for (int i = 1; i < argc; i++) {
-		std::string arg = argv[i];
-
-		if (arg == "-i" || arg == "--interactive") {
-			interactive = true;
-			continue;
-		}
-
-		if (arg == "-r" || arg == "--rounds") {
-			i++;
-			if (i >= argc) {
-				std::cout << "No count given for " << arg << " parameter" << std::endl;
-				return 1;
-			}
-			try {
-				rounds = std::stoi(argv[i]);
-			}
-			catch(const std::invalid_argument& e) {
-				std::cout << "No valid integer: " << argv[i] << std::endl;
-			}
-			
-			continue;
-		}
-
-		if (arg == "-h" || arg == "--help") {
-			std::cout
-			<< "Ant Optimizer\n"
-			<< "Usage: ./main [OPTIONS] FILE\n"
-			<< "\n"
-			<< "Options:\n"
-			<< "  -i    --interactive   : Start with GUI and manual control\n"
-			<< "  -r N  --rounds N      : Do N optimization steps. Requires [SHIFT] in interactive mode. Default: 100\n"
-			<< "  -h    --help          : Show this help page\n"
-			<< "\n"
-			<< "Interactive mode shortcuts:\n"
-			<< "  [L MOUSE BTN]   Drag node plane \n"
-			<< "  [MOUSE WHEEL]   Zoom node plane \n"
-			<< "  [R]             Reshuffle nodes\n"
-			<< "  [SPACE]         Simulate one step of springs. Positions nodes\n"
-			<< "  [A]             Simulate 1 ant colony iteration\n"
-			<< "  [SHIFT] + [A]   Simulate N ant colony iterations. N specified by -r parameter. Default: 100\n"
-			<< "  [ESC]           Quit\n"
-			<< "\n";
-
-			return 0;
-		}
-
-		problem_path = arg;
-	}
-
-	if (!std::filesystem::exists(problem_path)) {
-		std::cout << "File '" << problem_path << "' does not exist";
-		return 1;
-	}
-
-	rounds = std::max(1, rounds);
-
-	Problem problem(problem_path);
+	Problem problem(cli.problem_path);
 	
 	std::vector<Ant> ants;
 	ants.resize(problem.graph.node_count(), Ant(0));
@@ -156,7 +183,6 @@ int main(int argc, char* argv[]) {
 		if (e.second == std::numeric_limits<int>::max()) { continue; }
 		max_dist = std::max(e.second, max_dist);
 	}
-
 
 	Parameters params;
 	params.initial_pheromone = 0.01;
@@ -168,15 +194,12 @@ int main(int argc, char* argv[]) {
 	params.max_pheromone = 100;
 	params.zero_distance = 0.1;
 
-	AntOptimizer colony(
-		problem.graph, problem.dependencies, problem.weights,
-		ants, params
-	);
+	std::unique_ptr<AntOptimizer> colony = makeColony(cli.multithreaded, problem, ants, params);
 
-	if (!interactive) {
-		run_colony(colony, rounds);
+	if (!cli.interactive) {
+		run_colony(*colony, cli.rounds);
 
-		print_optimizer(colony, problem);
+		print_optimizer(*colony, problem);
 
 		return 0;
 	}
@@ -184,18 +207,18 @@ int main(int argc, char* argv[]) {
 	Workspace workspace(2, problem.graph);
 
 	workspace.edge_color = [&colony](graph::Edge edge) {
-		float val = colony.pheromone(edge) / colony.minmax_pheromone().second;
+		float val = colony->pheromone(edge) / colony->minmax_pheromone().second;
 		float c = lerp(0.1, 1.0, val);
 		c = easeOutQuad(c);
 		return std::make_pair(glm::vec3(0, c, 0), glm::vec3(c, 0, 0));
 	};
 
-	workspace.key_callback = [&colony, &workspace, &problem, rounds](int key, int action, int mods) {
+	workspace.key_callback = [&colony, &workspace, &problem, &cli](int key, int action, int mods) {
 		if (key == GLFW_KEY_A && action == GLFW_PRESS) {
-			int iterations = (mods & GLFW_MOD_SHIFT) ? rounds : 1;
-			run_colony(colony, iterations);
+			int iterations = (mods & GLFW_MOD_SHIFT) ? cli.rounds : 1;
+			run_colony(*colony, iterations);
 
-			print_optimizer(colony, problem);
+			print_optimizer(*colony, problem);
 			workspace.prepare_edges();
 		}
 	};
