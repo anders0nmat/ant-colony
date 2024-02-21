@@ -7,7 +7,7 @@
 #include <iostream>
 #endif
 
-#include "serial_ant_colony.hpp"
+#include "serial.hpp"
 
 /*
 	Optimize algorithm as described by [1]

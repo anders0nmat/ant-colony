@@ -7,7 +7,7 @@
 #include <iostream>
 #endif
 
-#include "any_ant_colony.hpp"
+#include "base.hpp"
 
 float AntOptimizer::edge_value(const Ant& ant, graph::Node node) const {
 	if (ant.allowed_nodes.at(node) != 0) { return 0; }

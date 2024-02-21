@@ -1,6 +1,6 @@
 #pragma once
 
-#include "any_ant_colony.hpp"
+#include "base.hpp"
 
 class ParallelAntOptimizer: public AntOptimizer {
 private:

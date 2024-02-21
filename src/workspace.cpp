@@ -18,8 +18,10 @@ namespace {
 		std::default_random_engine generator(rd());
 		std::uniform_real_distribution distribution(0.0, 2 * pi);
 		double angleRad = distribution(generator);
-		double x, y;
-		sincos(angleRad, &y, &x);
+		double 
+			x = cos(angleRad),
+			y = sin(angleRad);
+		//sincos(angleRad, &y, &x);
 		return glm::vec2(x, y) * radius;
 	}
 
@@ -173,6 +175,9 @@ bool Workspace::initBoard() {
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+	#ifdef __APPLE__
+	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+	#endif
 
 	window = glfwCreateWindow(800, 600, "Ant Optimization", nullptr, nullptr);
 	if (window == nullptr) {

@@ -3,7 +3,7 @@
 #include <map>
 #include <random>
 
-#include "graph.hpp"
+#include "../graph.hpp"
 
 struct Route {
 	std::vector<graph::Node> nodes;

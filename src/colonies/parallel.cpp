@@ -8,7 +8,7 @@
 #include <iostream>
 #endif
 
-#include "parallel_ant_colony.hpp"
+#include "parallel.hpp"
 
 struct ThreadArgs {
 	Ant& ant;
@@ -54,7 +54,7 @@ void ParallelAntOptimizer::optimize() {
 		ant.generator.seed(rand_device());
 
 		thread_args.emplace_back(ant, *this);
-		threads.emplace_back(0);
+		threads.emplace_back(static_cast<pthread_t>(0));
 		int succ = pthread_create(&threads.back(), nullptr, optimize_threaded, static_cast<void*>(&thread_args.back()));
 		if (succ != 0) {
 			std::cout << "pthread_create returned " << succ << std::endl;
@@ -70,7 +70,10 @@ void ParallelAntOptimizer::optimize() {
 		}
 
 		const Ant& ant = ants.at(i);
-
+		if (ant.route.length == -1) {
+			// Indicator for invalid solution
+			continue;
+		}
 		update_best_route(ant);
 
 		if (best_ant == nullptr || ant.route.length < best_ant->route.length) {

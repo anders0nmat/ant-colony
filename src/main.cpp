@@ -1,5 +1,5 @@
-#include "serial_ant_colony.hpp"
-#include "parallel_ant_colony.hpp"
+#include "colonies/serial.hpp"
+#include "colonies/parallel.hpp"
 #include "problem.hpp"
 #include "workspace.hpp"
 
