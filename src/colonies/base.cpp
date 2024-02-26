@@ -143,8 +143,8 @@ AntOptimizer::AntOptimizer(
 	std::vector<Ant>& initial_ants,
 	Parameters params)
 
-: params(params), graph(graph),
-  sequence_graph(sequence_graph), edge_weight(edge_weight), initial_ants(initial_ants) {
+: graph(graph),
+  sequence_graph(sequence_graph), edge_weight(edge_weight), initial_ants(initial_ants), params(params) {
 	
 	for (const auto& edge : graph.edges) {
 		edge_pheromone.emplace(edge, params.initial_pheromone);
