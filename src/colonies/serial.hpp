@@ -6,7 +6,7 @@ class SerialAntOptimizer: public AntOptimizer {
 public:
 	using AntOptimizer::AntOptimizer;
 
-	std::string name() override { return "Serial"; }
+	std::string name() override { return "serial"; }
 
 	/*
 		Optimize algorithm as described by [1]

@@ -33,7 +33,7 @@ private:
 public:
 	using AntOptimizer::AntOptimizer;
 
-	std::string name() override { return "Parallel_Exploration"; }
+	std::string name() override { return "parallel"; }
 
 	void optimize() override {
 		// Init Ants

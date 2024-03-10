@@ -140,7 +140,7 @@ AntOptimizer::AntOptimizer(
 	const graph::DirectedGraph& graph,
 	const graph::DirectedGraph& sequence_graph,
 	const std::map<graph::Edge, int>& edge_weight,
-	std::vector<Ant>& initial_ants,
+	const std::vector<Ant>& initial_ants,
 	Parameters params)
 
 : graph(graph),
