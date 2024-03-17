@@ -81,6 +81,9 @@
 		"deque": "cpp",
 		"span": "cpp",
 		"__tree": "cpp",
-		"queue": "cpp"
+		"queue": "cpp",
+		"forward_list": "cpp",
+		"unordered_set": "cpp",
+		"stack": "cpp"
 	}
 }

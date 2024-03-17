@@ -2,15 +2,17 @@
 #include <pthread.h>
 #include <iostream>
 
+#include <thread>
+
 #include "base.hpp"
 #include "../semaphore.hpp"
 
-class BatchedAntOptimizer: public AntOptimizer {
+class ThreadedAntOptimizer: public AntOptimizer {
 private:
 	struct ThreadArgs {
 		Ant* start_ant;
 		int ant_count;
-		BatchedAntOptimizer& optimizer;
+		ThreadedAntOptimizer& optimizer;
 		bool cancelled = false;
 	};
 
@@ -43,15 +45,20 @@ private:
 	std::vector<pthread_t> threads;
 	std::vector<ThreadArgs> thread_args;
 	std::vector<Ant> ants;
-	size_t batch_size = 1;
+	int num_cores = 1;
 public:
 	using AntOptimizer::AntOptimizer;
 
-	static constexpr const char* _name = "batched";
+	static constexpr const char* _name = "threaded";
 	std::string name() override { return _name; }
 
 	void init(std::string args) override {
-		batch_size = std::stoi(args);
+		if (args == "cores" || args == "native" || args == "auto" || args == "") {
+			num_cores = std::thread::hardware_concurrency();
+		}
+		else {
+			num_cores = std::stoi(args);
+		}
 	}
 
 	void optimize() override {
@@ -105,14 +112,20 @@ public:
 
 		ants = initial_ants;
 		size_t first_ant = 0;
-		while (first_ant  < initial_ants.size()) {
-			int ant_count = std::min(batch_size, initial_ants.size() - first_ant);
+
+		int 
+			ants_per_thread = initial_ants.size() / num_cores,
+			trailing_ants   = initial_ants.size() % num_cores;
+
+		for (int i = 0; i < num_cores; i++) {
+			int ant_count = ants_per_thread + (trailing_ants != 0 ? 1 : 0);
 			thread_args.emplace_back(ThreadArgs{
 				&ants.at(first_ant),
 				ant_count,
 				*this
 			});
 			first_ant += ant_count;
+			if (trailing_ants > 0) trailing_ants--;
 		}
 
 		for (auto & args : thread_args) {

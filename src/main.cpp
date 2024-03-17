@@ -1,6 +1,7 @@
 #include "colonies/serial.hpp"
 #include "colonies/parallel.hpp"
 #include "colonies/batched.hpp"
+#include "colonies/threaded.hpp"
 
 #include "problem.hpp"
 #include "workspace.hpp"
@@ -174,7 +175,7 @@ Profiler run_colony(AntOptimizer& optimizer, int rounds = 1) {
 
 	std::cout.precision(4);
 	std::cout
-		<< "[" << optimizer.name() << "] "
+		<< "[" << optimizer.name() << ":" << optimizer.init_args << "] "
 		<< avg
 		<< "ms average ("
 		<< elapsed
@@ -186,19 +187,16 @@ Profiler run_colony(AntOptimizer& optimizer, int rounds = 1) {
 
 struct AbstractColonyFactory {
 	virtual std::string name() const = 0;
-	virtual std::unique_ptr<AntOptimizer> make(const Problem& problem, const std::vector<Ant>& ants, Parameters params) = 0;
+	virtual std::unique_ptr<AntOptimizer> make(const Problem& problem, const std::vector<Ant>& ants, Parameters params, std::string args) = 0;
 	virtual ~AbstractColonyFactory() = default;
 };
 
 template<typename Ty>
 struct ColonyFactory: AbstractColonyFactory {
-	std::string name() const override { 
-		Ty* p = nullptr;	
-		return p->name();
-	}
+	std::string name() const override { return Ty::_name; }
 
-	std::unique_ptr<AntOptimizer> make(const Problem& problem, const std::vector<Ant>& ants, Parameters params) override {
-		return std::make_unique<Ty>(problem.graph, problem.dependencies, problem.weights, ants, params);
+	std::unique_ptr<AntOptimizer> make(const Problem& problem, const std::vector<Ant>& ants, Parameters params, std::string args) override {
+		return std::make_unique<Ty>(problem.graph, problem.dependencies, problem.weights, ants, params, args);
 	}
 };
 
@@ -208,13 +206,17 @@ void init_colonies() {
 
 	add(SerialAntOptimizer);
 	add(ParallelAntOptimizer);
-	add(BatchedAntOptimizer<1>);
-	add(BatchedAntOptimizer<15>);
+	add(BatchedAntOptimizer);
+	add(ThreadedAntOptimizer);
 
 	#undef add
 }
 
-std::unique_ptr<AntOptimizer> makeColony(std::string identifier, const Problem& problem, std::vector<Ant>& ants, Parameters params) {
+std::unique_ptr<AntOptimizer> makeColony(std::string colony_constructor, const Problem& problem, std::vector<Ant>& ants, Parameters params) {
+	auto sep = colony_constructor.find_first_of(":");
+	std::string identifier = colony_constructor.substr(0, sep);
+	std::string args = (sep != std::string::npos ? colony_constructor.substr(sep + 1) : "");
+
 	auto it = std::find_if(colonies.begin(), colonies.end(), [&](const std::unique_ptr<AbstractColonyFactory>& e){ return e->name() == identifier; });
 
 	if (it == colonies.end()) {
@@ -222,7 +224,7 @@ std::unique_ptr<AntOptimizer> makeColony(std::string identifier, const Problem& 
 		exit(1);
 	}
 
-	return (*it)->make(problem, ants, params);
+	return (*it)->make(problem, ants, params, args);
 }
 
 std::string print_duration(Profiler::Duration d) {
@@ -262,6 +264,7 @@ void append_profiler(std::filesystem::path path, const Profiler& pf, AntOptimize
 		<< "min=" << print_duration(mm.first) << "\n"
 		<< "max=" << print_duration(mm.second) << "\n"
 		<< "params=" << print_params(colony->params) << "\n"
+		<< "args=" << colony->init_args << "\n"
 		<< "\n";
 }
 
@@ -302,24 +305,17 @@ int main(int argc, char* argv[]) {
 	params.zero_distance = 0.1;
 
 	if (!cli.interactive) {
-		if (cli.colony_identifier == "all") {
-			for (auto& c : colonies) {
-				std::unique_ptr<AntOptimizer> colony = c->make(problem, ants, params);
-				Profiler pf = run_colony(*colony, cli.rounds);
+		std::vector<std::string> colony_options = {
+			"serial", "parallel", "batched:1", "batched:15", "threaded:auto", "threaded:4"
+		};
 
-				if (cli.profiler) {
-					auto profile = cli.problem_path.parent_path() / "profiler" / (cli.problem_path.stem().string() + "_" + colony->name() + ".txt");
-					std::filesystem::create_directory(profile.parent_path());
-					append_profiler(profile, pf, colony.get());
-				}
-
-				if (cli.verbose) {
-					print_optimizer(*colony, problem);
-				}
-			}
+		if (cli.colony_identifier != "all") {
+			colony_options.clear();
+			colony_options.push_back(cli.colony_identifier);
 		}
-		else {
-			std::unique_ptr<AntOptimizer> colony = makeColony(cli.colony_identifier, problem, ants, params);
+
+		for (const auto & option : colony_options) {
+			std::unique_ptr<AntOptimizer> colony = makeColony(option, problem, ants, params);
 			Profiler pf = run_colony(*colony, cli.rounds);
 
 			if (cli.profiler) {
@@ -330,7 +326,7 @@ int main(int argc, char* argv[]) {
 
 			if (cli.verbose) {
 				print_optimizer(*colony, problem);
-			}
+			}	
 		}
 
 		return 0;

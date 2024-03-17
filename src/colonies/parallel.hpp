@@ -33,7 +33,8 @@ private:
 public:
 	using AntOptimizer::AntOptimizer;
 
-	std::string name() override { return "parallel"; }
+	static constexpr const char* _name = "parallel";
+	std::string name() override { return _name; }
 
 	void optimize() override {
 		// Init Ants
