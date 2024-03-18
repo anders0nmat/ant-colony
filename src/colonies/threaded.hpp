@@ -45,7 +45,7 @@ private:
 	std::vector<pthread_t> threads;
 	std::vector<ThreadArgs> thread_args;
 	std::vector<Ant> ants;
-	int num_cores = 1;
+	size_t num_cores = 1;
 public:
 	using AntOptimizer::AntOptimizer;
 
@@ -113,11 +113,12 @@ public:
 		ants = initial_ants;
 		size_t first_ant = 0;
 
+		int cores = std::min(initial_ants.size(), num_cores);
 		int 
-			ants_per_thread = initial_ants.size() / num_cores,
-			trailing_ants   = initial_ants.size() % num_cores;
+			ants_per_thread = initial_ants.size() / cores,
+			trailing_ants   = initial_ants.size() % cores;
 
-		for (int i = 0; i < num_cores; i++) {
+		for (int i = 0; i < cores; i++) {
 			int ant_count = ants_per_thread + (trailing_ants != 0 ? 1 : 0);
 			thread_args.emplace_back(ThreadArgs{
 				&ants.at(first_ant),

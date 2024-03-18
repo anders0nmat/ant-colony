@@ -9,6 +9,7 @@
 #include <chrono>
 #include <filesystem>
 #include <memory>
+#include <string>
 
 struct CliParams {
 	std::string colony_identifier = "serial";
@@ -196,7 +197,10 @@ struct ColonyFactory: AbstractColonyFactory {
 	std::string name() const override { return Ty::_name; }
 
 	std::unique_ptr<AntOptimizer> make(const Problem& problem, const std::vector<Ant>& ants, Parameters params, std::string args) override {
-		return std::make_unique<Ty>(problem.graph, problem.dependencies, problem.weights, ants, params, args);
+		auto e = std::make_unique<Ty>(problem.graph, problem.dependencies, problem.weights, ants, params);
+		e->init_args = args;
+		e->init(args);
+		return e;
 	}
 };
 
@@ -212,10 +216,10 @@ void init_colonies() {
 	#undef add
 }
 
-std::unique_ptr<AntOptimizer> makeColony(std::string colony_constructor, const Problem& problem, std::vector<Ant>& ants, Parameters params) {
+std::unique_ptr<AntOptimizer> makeColony(const std::string& colony_constructor, const Problem& problem, std::vector<Ant>& ants, Parameters params) {
 	auto sep = colony_constructor.find_first_of(":");
-	std::string identifier = colony_constructor.substr(0, sep);
-	std::string args = (sep != std::string::npos ? colony_constructor.substr(sep + 1) : "");
+	const std::string identifier = colony_constructor.substr(0, sep);
+	const std::string args = (sep != std::string::npos ? colony_constructor.substr(sep + 1) : "");
 
 	auto it = std::find_if(colonies.begin(), colonies.end(), [&](const std::unique_ptr<AbstractColonyFactory>& e){ return e->name() == identifier; });
 

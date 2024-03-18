@@ -141,8 +141,7 @@ AntOptimizer::AntOptimizer(
 	const graph::DirectedGraph& sequence_graph,
 	const std::map<graph::Edge, int>& edge_weight,
 	const std::vector<Ant>& initial_ants,
-	Parameters params,
-	std::string args)
+	Parameters params)
 
 : graph(graph),
   sequence_graph(sequence_graph), edge_weight(edge_weight), initial_ants(initial_ants), params(params) {
@@ -175,9 +174,6 @@ AntOptimizer::AntOptimizer(
 	for (auto & p : edge_weight) {
 		this->edge_visibility.emplace(p.first, std::pow(1 / std::max(static_cast<float>(p.second), params.zero_distance), params.beta));
 	}
-
-	init_args = args;
-	this->init(args);
 }
 
 float AntOptimizer::pheromone(graph::Edge edge) const {

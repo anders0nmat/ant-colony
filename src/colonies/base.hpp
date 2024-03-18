@@ -140,8 +140,7 @@ public:
 		const graph::DirectedGraph& sequence_graph,
 		const std::map<graph::Edge, int>& edge_weight,
 		const std::vector<Ant>& initial_ants,
-		Parameters params,
-		std::string args);
+		Parameters params);
 
 	virtual ~AntOptimizer() = default;
 
@@ -149,7 +148,7 @@ public:
 	std::pair<float, float> minmax_pheromone() const;
 	const std::map<graph::Edge, float>& pheromone_list() const;
 
-	virtual void init(std::string args) {};
+	virtual void init(std::string args) {}
 
 	virtual void optimize() {}
 	virtual Profiler optimize(int rounds) { return Profiler(); }
