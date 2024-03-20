@@ -15,6 +15,7 @@ struct CliParams {
 	std::string colony_identifier = "serial";
 	bool interactive = false;
 	bool profiler = false;
+	bool csv_profiler = false;
 	bool verbose = false;
 	bool list = false;
 	int rounds = 100;
@@ -51,6 +52,11 @@ struct CliParams {
 				continue;
 			}
 
+			if (arg == "-c" || arg == "--csv-profiler") {
+				csv_profiler = true;
+				continue;
+			}
+
 			if (arg == "-l" || arg == "--list") {
 				list = true;
 				continue;
@@ -84,6 +90,7 @@ struct CliParams {
 				<< "  -t    --type          : Specify other colony implementation. Default: serial \n"
 				<< "  -l    --list          : List types of colony implementations \n"
 				<< "  -p    --profiler      : Append results to file. Location: <problem_folder>/profiler/<problem_name>_<implementation_name>.txt\n"
+				<< "  -c    --csv-profiler  : Append result to file. Location: <problem_folder/csv-profiler/problem_name>.csv\n"
 				<< "  -r N  --rounds N      : Do N optimization steps. Requires [SHIFT] in interactive mode. Default: 100\n"
 				<< "  -h    --help          : Show this help page\n"
 				<< "\n"
@@ -231,8 +238,8 @@ std::unique_ptr<AntOptimizer> makeColony(const std::string& colony_constructor, 
 	return (*it)->make(problem, ants, params, args);
 }
 
-std::string print_duration(Profiler::Duration d) {
-	return std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(d).count()) + " µs";
+std::string print_duration(Profiler::Duration d, bool append_unit) {
+	return std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(d).count()) + (append_unit ? " µs" : "");
 }
 
 std::string print_now() {
@@ -256,20 +263,42 @@ std::string print_params(Parameters params) {
 	return result;
 }
 
-void append_profiler(std::filesystem::path path, const Profiler& pf, AntOptimizer* colony) {
+void append_profiler(std::filesystem::path path, const Profiler& pf, AntOptimizer* colony, const Problem& problem) {
 	std::ofstream file(path, std::ios::app);
 	auto mm = pf.min_max();
 	file 
 		<< "### " << print_now() << " ###\n"
 		<< "solution=" << colony->best_route.length << "\n"
+		<< "bounds=" << problem.bounds.first << ", " << problem.bounds.second << "\n"
 		<< "rounds=" << pf.durations.size() << "\n"
-		<< "total=" << print_duration(pf.total()) << "\n"
-		<< "avg=" << print_duration(pf.avg()) << "\n"
-		<< "min=" << print_duration(mm.first) << "\n"
-		<< "max=" << print_duration(mm.second) << "\n"
+		<< "total=" << print_duration(pf.total(), true) << "\n"
+		<< "avg=" << print_duration(pf.avg(), true) << "\n"
+		<< "min=" << print_duration(mm.first, true) << "\n"
+		<< "max=" << print_duration(mm.second, true) << "\n"
 		<< "params=" << print_params(colony->params) << "\n"
 		<< "args=" << colony->init_args << "\n"
 		<< "\n";
+}
+
+void append_csv_profiler(std::filesystem::path path, const Profiler& pf, AntOptimizer* colony, const Problem& problem) {
+	bool new_file = !std::filesystem::is_regular_file(path);
+	std::ofstream file(path, std::ios::app);
+	if (new_file) {
+		file << "timestamp;optimizer;rounds;total_µs;avg_µs;min_µs;max_µs;solution;bounds_min;bounds_max;" << "\n";
+	}
+
+	auto mm = pf.min_max();
+	file
+		<< print_now() << ";"
+		<< colony->name() << ":" << colony->init_args << ";"
+		<< pf.durations.size() << ";"
+		<< print_duration(pf.total(), false) << ";"
+		<< print_duration(pf.avg(), false) << ";"
+		<< print_duration(mm.first, false) << ";"
+		<< print_duration(mm.second, false) << ";"
+		<< colony->best_route.length << ";"
+		<< problem.bounds.first << ";" << problem.bounds.second << ";";
+	file << "\n";
 }
 
 int main(int argc, char* argv[]) {
@@ -325,7 +354,13 @@ int main(int argc, char* argv[]) {
 			if (cli.profiler) {
 				auto profile = cli.problem_path.parent_path() / "profiler" / (cli.problem_path.stem().string() + "_" + colony->name() + ".txt");
 				std::filesystem::create_directory(profile.parent_path());
-				append_profiler(profile, pf, colony.get());
+				append_profiler(profile, pf, colony.get(), problem);
+			}
+
+			if (cli.csv_profiler) {
+				auto profile = cli.problem_path.parent_path() / "profiler" / (cli.problem_path.stem().string() + ".csv");
+				std::filesystem::create_directory(profile.parent_path());
+				append_csv_profiler(profile, pf, colony.get(), problem);
 			}
 
 			if (cli.verbose) {
