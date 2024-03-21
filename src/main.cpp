@@ -1,17 +1,25 @@
 #include "colonies/serial.hpp"
 #include "colonies/parallel.hpp"
+#include "colonies/batched.hpp"
+#include "colonies/threaded.hpp"
+
 #include "problem.hpp"
 #include "workspace.hpp"
 
 #include <chrono>
 #include <filesystem>
 #include <memory>
+#include <string>
 
 struct CliParams {
-	bool multithreaded = false;
+	std::string colony_identifier = "serial";
 	bool interactive = false;
+	bool profiler = false;
+	bool csv_profiler = false;
+	bool verbose = false;
+	bool list = false;
 	int rounds = 100;
-	std::string problem_path;
+	std::filesystem::path problem_path;
 
 	CliParams(int argc, char* argv[]) {
 		for (int i = 1; i < argc; i++) {
@@ -21,9 +29,36 @@ struct CliParams {
 				interactive = true;
 				continue;
 			}
+			
+			if (arg == "-v" || arg == "--verbose") {
+				verbose = true;
+				continue;
+			}
 
-			if (arg == "-m" || arg == "--multithreaded") {
-				multithreaded = true;
+			if (arg == "-t" || arg == "--type") {
+				i++;
+				if (i >= argc) {
+					std::cout << "No name given for " << arg << " parameter" << std::endl;
+					exit(1);
+				}
+				
+				colony_identifier = argv[i];
+
+				continue;
+			}
+
+			if (arg == "-p" || arg == "--profiler") {
+				profiler = true;
+				continue;
+			}
+
+			if (arg == "-c" || arg == "--csv-profiler") {
+				csv_profiler = true;
+				continue;
+			}
+
+			if (arg == "-l" || arg == "--list") {
+				list = true;
 				continue;
 			}
 
@@ -51,7 +86,11 @@ struct CliParams {
 				<< "\n"
 				<< "Options:\n"
 				<< "  -i    --interactive   : Start with GUI and manual control\n"
-				<< "  -m    --multithreaded : Use PThread to optimize algorithms"
+				<< "  -v    --verbose       : Output information about colony. Enabled by default in interactive mode\n"
+				<< "  -t    --type          : Specify other colony implementation. Default: serial \n"
+				<< "  -l    --list          : List types of colony implementations \n"
+				<< "  -p    --profiler      : Append results to file. Location: <problem_folder>/profiler/<problem_name>_<implementation_name>.txt\n"
+				<< "  -c    --csv-profiler  : Append result to file. Location: <problem_folder/csv-profiler/problem_name>.csv\n"
 				<< "  -r N  --rounds N      : Do N optimization steps. Requires [SHIFT] in interactive mode. Default: 100\n"
 				<< "  -h    --help          : Show this help page\n"
 				<< "\n"
@@ -69,11 +108,6 @@ struct CliParams {
 			}
 
 			problem_path = arg;
-		}
-
-		if (!std::filesystem::exists(problem_path)) {
-			std::cout << "File '" << problem_path << "' does not exist";
-			exit(1);
 		}
 
 		rounds = std::max(1, rounds);
@@ -138,10 +172,10 @@ void print_optimizer(const AntOptimizer& optimizer, const Problem& problem) {
 	print_best_route(optimizer, problem);
 }
 
-void run_colony(AntOptimizer& optimizer, int rounds = 1) {
+Profiler run_colony(AntOptimizer& optimizer, int rounds = 1) {
 	auto tp1 = std::chrono::high_resolution_clock::now();
 
-	optimizer.optimize(rounds);
+	Profiler pf = optimizer.optimize(rounds);
 
 	auto tp2 = std::chrono::high_resolution_clock::now();
 	double elapsed = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(tp2 - tp1).count();
@@ -149,30 +183,139 @@ void run_colony(AntOptimizer& optimizer, int rounds = 1) {
 
 	std::cout.precision(4);
 	std::cout
-		<< "Elapsed: " 
+		<< "[" << optimizer.name() << ":" << optimizer.init_args << "] "
 		<< avg
 		<< "ms average ("
 		<< elapsed
 		<< "ms total)"
 		<< std::endl;
+
+	return pf;
 }
 
-std::unique_ptr<AntOptimizer> makeColony(bool multithreaded, const Problem& problem, std::vector<Ant>& ants, Parameters params) {
-	if (multithreaded) {
-		return std::make_unique<ParallelAntOptimizer>(
-			problem.graph, problem.dependencies, problem.weights,
-			ants, params);;
+struct AbstractColonyFactory {
+	virtual std::string name() const = 0;
+	virtual std::unique_ptr<AntOptimizer> make(const Problem& problem, const std::vector<Ant>& ants, Parameters params, std::string args) = 0;
+	virtual ~AbstractColonyFactory() = default;
+};
+
+template<typename Ty>
+struct ColonyFactory: AbstractColonyFactory {
+	std::string name() const override { return Ty::_name; }
+
+	std::unique_ptr<AntOptimizer> make(const Problem& problem, const std::vector<Ant>& ants, Parameters params, std::string args) override {
+		auto e = std::make_unique<Ty>(problem.graph, problem.dependencies, problem.weights, ants, params);
+		e->init_args = args;
+		e->init(args);
+		return e;
 	}
-	else {
-		return std::make_unique<SerialAntOptimizer>(
-			problem.graph, problem.dependencies, problem.weights,
-			ants, params);
+};
+
+std::vector<std::unique_ptr<AbstractColonyFactory>> colonies;
+void init_colonies() {
+	#define add(CLASS) do { colonies.emplace_back(std::make_unique<ColonyFactory<CLASS>>()); } while(0)
+
+	add(SerialAntOptimizer);
+	add(ParallelAntOptimizer);
+	add(BatchedAntOptimizer);
+	add(ThreadedAntOptimizer);
+
+	#undef add
+}
+
+std::unique_ptr<AntOptimizer> makeColony(const std::string& colony_constructor, const Problem& problem, std::vector<Ant>& ants, Parameters params) {
+	auto sep = colony_constructor.find_first_of(":");
+	const std::string identifier = colony_constructor.substr(0, sep);
+	const std::string args = (sep != std::string::npos ? colony_constructor.substr(sep + 1) : "");
+
+	auto it = std::find_if(colonies.begin(), colonies.end(), [&](const std::unique_ptr<AbstractColonyFactory>& e){ return e->name() == identifier; });
+
+	if (it == colonies.end()) {
+		std::cout << "Unknown colony: " << identifier << std::endl;
+		exit(1);
 	}
+
+	return (*it)->make(problem, ants, params, args);
+}
+
+std::string print_duration(Profiler::Duration d, bool append_unit) {
+	return std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(d).count()) + (append_unit ? " µs" : "");
+}
+
+std::string print_now() {
+	auto current_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+	char now_str[std::size("2000-01-01T16:00:00")];
+	std::strftime(now_str, std::size(now_str), "%FT%T", std::gmtime(&current_time));
+	return std::string(now_str);
+}
+
+std::string print_params(Parameters params) {
+	std::string result = "";
+	result += "alpha: " + std::to_string(params.alpha) + ", ";
+	result += "beta: " + std::to_string(params.beta) + ", ";
+	result += "roh: " + std::to_string(params.roh) + ", ";
+	result += "q: " + std::to_string(params.q) + ", ";
+	result += "initial_pheromone: " + std::to_string(params.initial_pheromone) + ", ";
+	result += "min_pheromone: " + std::to_string(params.min_pheromone) + ", ";
+	result += "max_pheromone: " + std::to_string(params.max_pheromone) + ", ";
+	result += "zero_distance: " + std::to_string(params.zero_distance);
+
+	return result;
+}
+
+void append_profiler(std::filesystem::path path, const Profiler& pf, AntOptimizer* colony, const Problem& problem) {
+	std::ofstream file(path, std::ios::app);
+	auto mm = pf.min_max();
+	file 
+		<< "### " << print_now() << " ###\n"
+		<< "solution=" << colony->best_route.length << "\n"
+		<< "bounds=" << problem.bounds.first << ", " << problem.bounds.second << "\n"
+		<< "rounds=" << pf.durations.size() << "\n"
+		<< "total=" << print_duration(pf.total(), true) << "\n"
+		<< "avg=" << print_duration(pf.avg(), true) << "\n"
+		<< "min=" << print_duration(mm.first, true) << "\n"
+		<< "max=" << print_duration(mm.second, true) << "\n"
+		<< "params=" << print_params(colony->params) << "\n"
+		<< "args=" << colony->init_args << "\n"
+		<< "\n";
+}
+
+void append_csv_profiler(std::filesystem::path path, const Profiler& pf, AntOptimizer* colony, const Problem& problem) {
+	bool new_file = !std::filesystem::is_regular_file(path);
+	std::ofstream file(path, std::ios::app);
+	if (new_file) {
+		file << "timestamp;optimizer;rounds;total_µs;avg_µs;min_µs;max_µs;solution;bounds_min;bounds_max;" << "\n";
+	}
+
+	auto mm = pf.min_max();
+	file
+		<< print_now() << ";"
+		<< colony->name() << ":" << colony->init_args << ";"
+		<< pf.durations.size() << ";"
+		<< print_duration(pf.total(), false) << ";"
+		<< print_duration(pf.avg(), false) << ";"
+		<< print_duration(mm.first, false) << ";"
+		<< print_duration(mm.second, false) << ";"
+		<< colony->best_route.length << ";"
+		<< problem.bounds.first << ";" << problem.bounds.second << ";";
+	file << "\n";
 }
 
 int main(int argc, char* argv[]) {
+	init_colonies();
 	CliParams cli(argc, argv);
 
+	if (cli.list) {
+		for (const auto& e : colonies) {
+			std::cout << e->name() << '\n';
+		}
+		return 0;
+	}
+
+	if (!std::filesystem::exists(cli.problem_path)) {
+		std::cout << "File '" << cli.problem_path << "' does not exist";
+		exit(1);
+	}
 	Problem problem(cli.problem_path);
 	
 	std::vector<Ant> ants;
@@ -194,16 +337,41 @@ int main(int argc, char* argv[]) {
 	params.max_pheromone = 100;
 	params.zero_distance = 0.1;
 
-	std::unique_ptr<AntOptimizer> colony = makeColony(cli.multithreaded, problem, ants, params);
-
 	if (!cli.interactive) {
-		run_colony(*colony, cli.rounds);
+		std::vector<std::string> colony_options = {
+			"serial", "parallel", "batched:1", "batched:15", "threaded:auto", "threaded:4"
+		};
 
-		print_optimizer(*colony, problem);
+		if (cli.colony_identifier != "all") {
+			colony_options.clear();
+			colony_options.push_back(cli.colony_identifier);
+		}
+
+		for (const auto & option : colony_options) {
+			std::unique_ptr<AntOptimizer> colony = makeColony(option, problem, ants, params);
+			Profiler pf = run_colony(*colony, cli.rounds);
+
+			if (cli.profiler) {
+				auto profile = cli.problem_path.parent_path() / "profiler" / (cli.problem_path.stem().string() + "_" + colony->name() + ".txt");
+				std::filesystem::create_directory(profile.parent_path());
+				append_profiler(profile, pf, colony.get(), problem);
+			}
+
+			if (cli.csv_profiler) {
+				auto profile = cli.problem_path.parent_path() / "profiler" / (cli.problem_path.stem().string() + ".csv");
+				std::filesystem::create_directory(profile.parent_path());
+				append_csv_profiler(profile, pf, colony.get(), problem);
+			}
+
+			if (cli.verbose) {
+				print_optimizer(*colony, problem);
+			}	
+		}
 
 		return 0;
 	}
 
+	std::unique_ptr<AntOptimizer> colony = makeColony(cli.colony_identifier, problem, ants, params);
 	Workspace workspace(2, problem.graph);
 
 	workspace.edge_color = [&colony](graph::Edge edge) {

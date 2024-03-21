@@ -2,6 +2,8 @@
 
 #include <map>
 #include <random>
+#include <chrono>
+#include <algorithm>
 
 #include "../graph.hpp"
 
@@ -40,6 +42,38 @@ struct Parameters {
 	float min_pheromone;
 	float max_pheromone;
 	float zero_distance;
+};
+
+struct Profiler {
+	typedef std::chrono::high_resolution_clock Clock;	
+	typedef Clock::duration Duration;
+	typedef Clock::time_point Timepoint;
+	
+	std::vector<Duration> durations;
+
+	Timepoint start_point;
+
+	void start() {
+		start_point = Clock::now();
+	}
+
+	void stop() {
+		auto elapsed = Clock::now() - start_point;
+		durations.push_back(elapsed);
+	}
+
+	Duration total() const {
+		return std::accumulate(durations.begin(), durations.end(), Duration());
+	}
+
+	Duration avg() const {
+		return total() / durations.size();
+	}
+
+	std::pair<Duration, Duration> min_max() const {
+		const auto mm = std::minmax_element(durations.begin(), durations.end());
+		return std::make_pair(*mm.first, *mm.second);
+	}
 };
 
 class AntOptimizer {
@@ -87,7 +121,6 @@ protected:
 	*/
 	bool goal_reached(const Ant& ant) const;
 	
-	const Parameters params;
 	
 	const graph::DirectedGraph& graph;
 	const graph::DirectedGraph& sequence_graph;
@@ -97,14 +130,16 @@ protected:
 	std::vector<Ant> initial_ants;
 	std::random_device rand_device;
 public:
+	const Parameters params;
 	int round = 0;
 	Route best_route;
+	std::string init_args;
 
 	AntOptimizer(
 		const graph::DirectedGraph& graph,
 		const graph::DirectedGraph& sequence_graph,
 		const std::map<graph::Edge, int>& edge_weight,
-		std::vector<Ant>& initial_ants,
+		const std::vector<Ant>& initial_ants,
 		Parameters params);
 
 	virtual ~AntOptimizer() = default;
@@ -113,7 +148,14 @@ public:
 	std::pair<float, float> minmax_pheromone() const;
 	const std::map<graph::Edge, float>& pheromone_list() const;
 
+	virtual void init(std::string args) {}
+
 	virtual void optimize() {}
-	virtual void optimize(int rounds) {}
+	virtual Profiler optimize(int rounds) { return Profiler(); }
+
+	static constexpr const char* _name = "abstract";
+	virtual std::string name() { return _name; }
 };
+
+
 
