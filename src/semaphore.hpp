@@ -2,6 +2,7 @@
 #include <pthread.h>
 #include <iostream>
 
+// is this a Barrier?
 struct Semaphore {
 private:
 	pthread_cond_t cond;
@@ -39,7 +40,6 @@ public:
 		check_error(pthread_mutex_lock(&mutex), "mutex lock", "wait_and_lock()");
 		while (value != wait_value)
 			check_error(pthread_cond_wait(&cond, &mutex), "cond wait", "wait_and_lock()");
-	
 	}
 
 	void unlock() {

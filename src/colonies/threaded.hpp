@@ -7,6 +7,8 @@
 #include "base.hpp"
 #include "../semaphore.hpp"
 
+//? Move best ant calculatio to thread?
+
 class ThreadedAntOptimizer: public AntOptimizer {
 private:
 	struct ThreadArgs {

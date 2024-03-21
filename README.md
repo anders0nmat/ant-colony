@@ -28,6 +28,10 @@ Optimization ideas:
 
 Online latex: overleaf.hrz.tu-chemnitz.de
 Paper: Document decisions
+Include referenced code snippets
+
+One optimize() call is an "iteration"
+
 
 
 ## Sources
